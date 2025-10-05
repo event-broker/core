@@ -9,13 +9,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/your-org/event-broker.git",
-    "directory": "shared/mfe/event-broker"
+    "url": "https://github.com/event-broker/core.git"
   },
   "bugs": {
-    "url": "https://github.com/your-org/event-broker/issues"
+    "url": "https://github.com/event-broker/core/issues"
   },
-  "homepage": "https://github.com/your-org/event-broker#readme",
+  "homepage": "https://github.com/event-broker/core#readme",
   "scripts": {
     "build": "tsc",
     "watch": "tsc --watch",

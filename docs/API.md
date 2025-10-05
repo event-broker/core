@@ -20,6 +20,8 @@ Complete API documentation for `@event-broker/core`.
 
 Core event routing and lifecycle management class.
 
+> **Note for Developers:** Most EventBroker methods (`sendTo`, `broadcast`, `subscribe`, `unsubscribe`) are called internally by clients. In application code, you should use client methods (`dispatch`, `on`, `off`) instead. See the [Clients](#clients) section for recommended usage patterns.
+
 ### Constructor
 
 ```typescript
@@ -79,6 +81,10 @@ async sendTo<K extends T>(
 **Example:**
 
 ```typescript
+// This method is called internally by clients
+// Developers typically use client.dispatch() instead
+
+// Internal usage by InMemoryClient:
 const result = await broker.sendTo('user.created.v1', 'auth', 'dashboard', {
   userId: '123',
   email: 'user@example.com',
@@ -89,6 +95,9 @@ if (result.status === 'ACK') {
 } else {
   console.error('Delivery failed:', result.message);
 }
+
+// Recommended: Use client.dispatch() for application code
+// See InMemoryClient section below
 ```
 
 ---
@@ -118,12 +127,19 @@ async broadcast<K extends T>(
 **Example:**
 
 ```typescript
+// This method is called internally by clients
+// Developers typically use client.dispatch() instead
+
+// Internal usage by InMemoryClient:
 const result = await broker.broadcast('user.loggedOut.v1', 'auth', {
   userId: '123',
   timestamp: Date.now(),
 });
 
 console.log(`Broadcast sent to ${result.message}`);
+
+// Recommended: Use client.dispatch() for application code
+// See InMemoryClient section below
 ```
 
 ---
@@ -149,9 +165,16 @@ subscribe<K extends T>(
 **Example:**
 
 ```typescript
+// This method is called internally by clients
+// Developers typically use client.on() instead
+
+// Internal usage:
 broker.subscribe('dashboard', 'user.created.v1', (event) => {
   console.log('New user:', event.data);
 });
+
+// Recommended: Use client.on() for application code
+// See InMemoryClient section below
 ```
 
 ---
@@ -432,8 +455,8 @@ Dispatch event (unicast or broadcast).
 
 ```typescript
 async dispatch(
-  recipient: ClientID | '*',
   eventType: T,
+  recipient: ClientID | '*',
   data: P
 ): Promise<EventResult>
 ```
@@ -441,12 +464,16 @@ async dispatch(
 **Example:**
 
 ```typescript
-// Unicast
-await dashboard.dispatch('page.viewed.v1', 'analytics', {
+// Unicast - send to specific client
+const result = await dashboard.dispatch('page.viewed.v1', 'analytics', {
   page: '/dashboard',
 });
 
-// Broadcast
+if (result.status === 'ACK') {
+  console.log('Event delivered to analytics');
+}
+
+// Broadcast - send to all clients
 await dashboard.dispatch('user.loggedOut.v1', '*', {
   userId: '123',
 });

@@ -1,4 +1,7 @@
-# @event-broker/core
+<div align="center">
+  <img src=".github/assets/mascote.png" alt="Event Broker Mascot" width="300" />
+  
+  # @event-broker/core
 
 > Type-safe, CloudEvents-compliant event broker for microfrontend architectures
 
@@ -6,7 +9,9 @@
 [![CloudEvents](https://img.shields.io/badge/CloudEvents-v1.0-green.svg)](https://cloudevents.io/)
 [![License](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
 
-**Event Broker** is a production-ready, enterprise-grade event communication system designed specifically for complex microfrontend architectures. It provides unified, type-safe event handling across multiple browser contexts, processes, and transport layers.
+</div>
+
+**Event Broker** is a production-ready event communication system designed specifically for complex microfrontend architectures. It provides unified, type-safe event handling across multiple browser contexts, processes, and transport layers.
 
 ## ✨ Key Features
 
@@ -14,7 +19,6 @@
 - 🌐 **Universal Transport** - Single API for WebSocket, postMessage, Workers, Service Workers, and in-memory communication
 - 📊 **CloudEvents v1.0** - CNCF standard compliance for enterprise integration
 - 🔌 **Extensible** - Plugin system via hooks for custom logic (ACL, validation, etc)
-- ⚡ **High Performance** - 20,000+ events/sec with O(1) subscription lookups
 - 🔄 **Auto Tab Sync** - Automatic cross-tab synchronization via BroadcastChannel
 - ✅ **Delivery Confirmation** - ACK/NACK responses for reliable messaging
 - 📦 **Zero Dependencies** - Lightweight core with optional plugins
@@ -41,7 +45,7 @@ type Events = {
 // 2. Create broker instance
 const broker = new EventBroker<keyof Events, Events, string>();
 
-// 3. Create client
+// 3. Create client with unique name for some MFE
 const client = new InMemoryClient('dashboard', broker);
 
 // 4. Subscribe to events
@@ -55,13 +59,6 @@ await client.dispatch('user.created.v1', '*', {
   email: 'user@example.com',
 });
 ```
-
-## 📚 Documentation
-
-- **[Getting Started](docs/GETTING_STARTED.md)** - Step-by-step tutorial
-- **[API Reference](docs/API.md)** - Complete API documentation
-- **[Architecture](docs/ARCHITECTURE.md)** - System design and patterns
-- **[Examples](docs/EXAMPLES.md)** - Real-world use cases
 
 ## 🏗️ Architecture
 
@@ -86,7 +83,7 @@ await client.dispatch('user.created.v1', '*', {
 
 - **EventBroker** - Central routing and lifecycle management
 - **Clients** - Transport adapters (InMemory, WebSocket, Worker, PostMessage, ServiceWorker)
-- **Subscriptions** - Efficient O(1) subscription management
+- **Subscriptions** - Efficient subscription management
 - **HooksRegistry** - Extensibility system for plugins
 - **TabSync** - Automatic cross-tab synchronization
 
@@ -118,35 +115,16 @@ import { WebSocket } from './infrastructure/WebSocket'; // Your WebSocket wrappe
 const ws = new WebSocket('wss://api.example.com');
 const backend = new WebSocketClient('backend', broker, ws.socket);
 
-// Subscribe to backend events
+// Subscribe to events from backend
 backend.on('notification.received.v1');
 
-// Send to backend
-await backend.dispatch('analytics.track.v1', 'backend', {
-  event: 'page_view',
-  page: '/dashboard',
-});
-```
-
-### Web Worker Communication
-
-```typescript
-const worker = new Worker('./analytics-worker.js');
-const analytics = new WorkerClient('analytics', broker, worker);
-
-analytics.on('user.action.v1');
-
-await analytics.dispatch('user.action.v1', 'analytics', {
-  action: 'button_click',
-  target: 'submit',
-});
+// When backend sends an event, WebSocketClient automatically dispatches it to broker
+// The dispatch() is called internally by WebSocketClient when receiving messages
 ```
 
 ## 🔌 Ecosystem
 
-- **[@event-broker/registry](../mfe-event-registry)** - Centralized type-safe event schema registry
 - **[@event-broker/devtools](../mfe-event-devtools)** - React DevTools panel for debugging
-- **[@event-broker/observability](../mfe-event-observability)** - Metrics, logging, and tracing
 
 ## 📊 Performance
 
@@ -169,35 +147,34 @@ npm run bench
 ### Hooks & Plugins
 
 ```typescript
-// Access control
-broker.useBeforeSendHook((event) => {
-  if (!hasPermission(event.source, event.type)) {
-    return false; // Block event
-  }
-  return true;
-});
+// Create plugin with multiple hooks
+const myPlugin = (broker) => {
+  // Access control
+  broker.useBeforeSendHook((event) => {
+    if (!hasPermission(event.source, event.type)) {
+      return false; // Block event
+    }
+    return true;
+  });
 
-// Logging
-broker.useAfterSendHook((event, result) => {
-  logger.info('Event sent', { event, result });
-});
+  // Logging
+  broker.useAfterSendHook((event, result) => {
+    logger.info('Event sent', { event, result });
+  });
 
-// Metrics
-broker.useOnSubscribeHandler((eventType, clientId) => {
-  metrics.increment('subscriptions', { eventType, clientId });
-});
-```
+  // Metrics
+  broker.useOnSubscribeHandler((eventType, clientId) => {
+    metrics.increment('subscriptions', { eventType, clientId });
+  });
 
-### Event Registry Integration
+  // Return cleanup function
+  return () => {
+    console.log('Plugin cleanup');
+  };
+};
 
-```typescript
-import { eventRegistry } from '@event-broker/registry';
-
-// Type-safe events from registry
-type Events = typeof eventRegistry.events;
-type EventTypes = keyof Events;
-
-const broker = new EventBroker<EventTypes, Events, string>();
+// Register plugin
+broker.registerHooks([myPlugin]);
 ```
 
 ### DevTools Integration
@@ -222,10 +199,6 @@ npm run test:watch
 npm run test:coverage
 ```
 
-## 🤝 Contributing
-
-We welcome contributions! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
 ## 📝 License
 
 MIT © 2024
@@ -233,7 +206,6 @@ MIT © 2024
 ## 🙏 Acknowledgments
 
 - Built with [CloudEvents v1.0](https://cloudevents.io/) specification
-- Inspired by enterprise event-driven architectures
 - Designed for real-world microfrontend challenges at scale
 
 ---
