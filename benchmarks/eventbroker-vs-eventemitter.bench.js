@@ -4,7 +4,7 @@
  */
 
 const { EventBroker } = require('../dist/core/EventBroker');
-const { LocalClient } = require('../dist/clients/LocalClient');
+const { InMemoryClient } = require('../dist/clients/InMemoryClient/InMemoryClient');
 const { EventEmitter } = require('events');
 
 console.log('🔬 СРАВНИТЕЛЬНЫЙ АНАЛИЗ: EventBroker vs EventEmitter 🔬\n');
@@ -75,7 +75,7 @@ function testEventEmitter() {
 function testEventBroker(eventEmitterThroughput, eventEmitterMemory) {
   console.log(`\n📊 Тестируем EventBroker...`);
 
-  const broker = new EventBroker({ defaultTabSync: false });
+  const broker = new EventBroker();
   const clients = [];
   const clientCount = 100;
   const eventsPerClient = 1000;
@@ -83,7 +83,7 @@ function testEventBroker(eventEmitterThroughput, eventEmitterMemory) {
 
   // Создаем клиенты EventBroker
   for (let i = 0; i < clientCount; i++) {
-    const client = new LocalClient(`client-${i}`, broker);
+    const client = new InMemoryClient(`client-${i}`, broker);
     clients.push(client);
 
     client.on('test-event', () => {

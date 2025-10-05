@@ -4,12 +4,12 @@
  */
 
 const { EventBroker } = require('../dist/core/EventBroker');
-const { LocalClient } = require('../dist/clients/LocalClient');
+const { InMemoryClient } = require('../dist/clients/InMemoryClient/InMemoryClient');
 
 console.log('💥 СТРЕСС-ТЕСТ EventBroker - Воспроизведение результатов отчета 💥\n');
 
 function stressTest() {
-  const broker = new EventBroker({ defaultTabSync: false });
+  const broker = new EventBroker();
   const clientCount = 100;
   const eventsPerClient = 1000;
   const clients = [];
@@ -21,7 +21,7 @@ function stressTest() {
   // Создаем много клиентов
   for (let i = 0; i < clientCount; i++) {
     try {
-      const client = new LocalClient(`stress-client-${i}`, broker);
+      const client = new InMemoryClient(`stress-client-${i}`, broker);
       clients.push(client);
 
       // Подписка на события с обработкой ошибок
