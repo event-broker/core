@@ -1,0 +1,73 @@
+{
+  "name": "@event-broker/core",
+  "version": "2.1.0",
+  "description": "Type-safe event broker for microfrontend architectures with unified transport layer",
+  "private": true,
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "author": "Event Broker Contributors",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/your-org/event-broker.git",
+    "directory": "shared/mfe/event-broker"
+  },
+  "bugs": {
+    "url": "https://github.com/your-org/event-broker/issues"
+  },
+  "homepage": "https://github.com/your-org/event-broker#readme",
+  "scripts": {
+    "build": "tsc",
+    "watch": "tsc --watch",
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "bench": "jest benchmarks --testTimeout=60000",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,md}\"",
+    "prepare": "npm run build"
+  },
+  "devDependencies": {
+    "@types/benchmark": "^2.1.5",
+    "@types/jest": "^29.5.0",
+    "benchmark": "^2.1.4",
+    "jest": "^29.5.0",
+    "prettier": "^3.0.0",
+    "ts-jest": "^29.1.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  },
+  "dependencies": {
+    "uuid": "^11.1.0"
+  },
+  "keywords": [
+    "cloudevents",
+    "microfrontend",
+    "event-bus",
+    "event-broker",
+    "cncf",
+    "enterprise",
+    "microservices",
+    "websocket",
+    "web-worker",
+    "postmessage",
+    "service-worker",
+    "typescript",
+    "type-safe",
+    "observability",
+    "devtools",
+    "mfe",
+    "micro-frontends",
+    "event-driven",
+    "pubsub",
+    "message-broker"
+  ],
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE",
+    "docs"
+  ],
+  "engines": {
+    "node": ">=16.0.0"
+  }
+}
