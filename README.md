@@ -43,7 +43,7 @@ type Events = {
 };
 
 // 2. Create broker instance
-const broker = new EventBroker<keyof Events, Events, string>();
+const broker = new EventBroker<keyof Events, Events>();
 
 // 3. Create client with unique name for some MFE
 const client = new InMemoryClient('dashboard', broker);
@@ -65,9 +65,9 @@ await client.dispatch('user.created.v1', '*', {
 ```
 ┌─────────────────────────────────────────────────────────┐
 │                     Event Broker                        │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐ │
-│  │ Subscriptions│  │ HooksRegistry│  │   TabSync    │ │
-│  └──────────────┘  └──────────────┘  └──────────────┘ │
+│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐   │
+│  │ Subscriptions│  │ HooksRegistry│  │   TabSync    │   │
+│  └──────────────┘  └──────────────┘  └──────────────┘   │
 └─────────────────────────────────────────────────────────┘
                           ▲
                           │
@@ -120,6 +120,55 @@ backend.on('notification.received.v1');
 
 // When backend sends an event, WebSocketClient automatically dispatches it to broker
 // The dispatch() is called internally by WebSocketClient when receiving messages
+```
+
+### Request-Reply Pattern (Bidirectional Communication)
+
+Event Broker supports **Request-Reply** pattern where handlers can return data back to the sender:
+
+```typescript
+// Setup: User Service responds with user data
+userService.on('user.get.v1', async (event) => {
+  const user = await database.getUser(event.data.userId);
+  return user; // Return data to sender!
+});
+
+// Usage: Dashboard requests user data
+const result = await dashboard.dispatch('user.get.v1', 'user-service', {
+  userId: 123,
+});
+
+if (result.status === 'ACK') {
+  console.log('User data:', result.data); // Access returned data
+  // result.data = { id: 123, name: 'John', email: 'john@example.com' }
+}
+```
+
+**Key Features:**
+
+- ✅ No additional events needed (uses existing Promise chain)
+- ✅ Type-safe responses
+- ✅ Works with async handlers
+
+**Example: Form Validation**
+
+```typescript
+// Validation Service
+validationService.on('form.validate.v1', (event) => {
+  const errors = validateEmail(event.data.email);
+  return { valid: errors.length === 0, errors };
+});
+
+// Form Component
+const result = await formClient.dispatch('form.validate.v1', 'validation-service', {
+  email: 'user@example.com',
+});
+
+if (result.data.valid) {
+  submitForm();
+} else {
+  showErrors(result.data.errors);
+}
 ```
 
 ## 🔌 Ecosystem

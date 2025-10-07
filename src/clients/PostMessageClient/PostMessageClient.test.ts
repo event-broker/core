@@ -8,7 +8,7 @@ type TestPayloads = {
 };
 
 describe('PostMessageClient', () => {
-  let broker: EventBroker<TestEvents, TestPayloads, string>;
+  let broker: EventBroker<TestEvents, TestPayloads>;
   let mockWindow: any;
 
   beforeEach(() => {

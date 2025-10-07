@@ -20,10 +20,10 @@ export class WebSocketClient<T extends string, P = any> implements Client<T, P> 
   static readonly clientType = 'WebSocketClient' as const;
 
   readonly id: ClientID;
-  #broker: EventBroker<T, any, any>;
+  #broker: EventBroker<T, any>;
   #ws: WebSocket;
 
-  constructor(id: ClientID, broker: EventBroker<T, any, any>, ws: WebSocket) {
+  constructor(id: ClientID, broker: EventBroker<T, any>, ws: WebSocket) {
     this.id = id;
     this.#broker = broker;
     this.#ws = ws;

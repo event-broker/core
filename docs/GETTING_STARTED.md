@@ -103,7 +103,7 @@ import { EventBroker } from '@event-broker/core';
 import type { AppEvents, AppEventTypes } from '../events/types';
 
 export function createBroker() {
-  return new EventBroker<AppEventTypes, AppEvents, string>();
+  return new EventBroker<AppEventTypes, AppEvents>();
 }
 
 // Create singleton instance
@@ -501,10 +501,10 @@ Always define event types upfront:
 type Events = {
   'user.created.v1': { userId: string };
 };
-const broker = new EventBroker<keyof Events, Events, string>();
+const broker = new EventBroker<keyof Events, Events>();
 
 // ❌ Bad - No type safety
-const broker = new EventBroker<string, any, string>();
+const broker = new EventBroker<string, any>();
 ```
 
 ### 3. Cleanup

@@ -1,10 +1,10 @@
 import type { EventBroker } from './EventBroker';
 
-/** Уникальный идентификатор клиента в системе */
+/** Unique client identifier in the system */
 export type ClientID = string;
 
 /**
- * CloudEvents v1.0 базовая структура
+ * CloudEvents v1.0 base structure
  * @see https://cloudevents.io/
  */
 export interface CloudEvent {
@@ -31,48 +31,58 @@ export interface CloudEvent {
 }
 
 /**
- * CloudEvents для микрофронтендов с расширениями
- * Это основной тип события в системе
+ * CloudEvents for microfrontends with custom extensions
+ * This is the main event type used throughout the system
  */
 export interface MicrofrontendCloudEvent<T extends string = string, P = any> extends CloudEvent {
   type: T;
   data: P;
 
-  // Microfrontend-specific extensions (должны начинаться с префикса)
+  // Microfrontend-specific extensions (must start with prefix)
   /** Target microfrontend ID or '*' for broadcast */
   'mfe-recipient': ClientID | '*';
 
-  /** Original sender session ID  */
+  /** Original sender session ID */
   'mfe-sessionid'?: string;
 }
 
-// Основной тип события - CloudEvents v1.0
+// Main event type - CloudEvents v1.0 compliant
 export type Event<T extends string = string, P = any> = MicrofrontendCloudEvent<T, P>;
 
 /**
- * Подпись обработчика: получает CloudEvent
- * Поддерживает автоматический ACK/NACK через Promise
+ * Event handler function signature: receives CloudEvent
+ * Supports automatic ACK/NACK via Promise resolution
+ *
+ * Can return data for Request-Reply pattern:
+ * - void/Promise<void> - Standard event handler (fire-and-forget)
+ * - any/Promise<any> - Query handler with response data
  */
-export type HandlerFn<T extends string, P = unknown> = (event: Event<T, P>) => void | Promise<void>;
+export type HandlerFn<T extends string, P = unknown> = (
+  event: Event<T, P>,
+) => void | any | Promise<void | any>;
 
 /**
- * Единый результат отправки событий
+ * Unified result of event dispatch operation
+ *
+ * For Request-Reply pattern, may contain response data:
+ * - status: 'ACK' + data - Successful request with response data
+ * - status: 'ACK' without data - Successful event/command (no response)
+ * - status: 'NACK' - Delivery or processing failure
  */
-export interface EventResult {
-  /** Статус: ACK = успешно, NACK = ошибка */
+export interface EventResult<TResponse = any> {
+  /** Status: ACK = success, NACK = failure */
   status: 'ACK' | 'NACK';
-  /** Описание результата */
+  /** Human-readable result description */
   message: string;
-  /** Время отправки */
+  /** Timestamp of dispatch operation */
   timestamp: number;
-  /** ID целевого клиента (только для unicast) */
+  /** Target client ID (only for unicast) */
   clientId?: ClientID;
+  /** Response data from handler (for Request-Reply pattern) */
+  data?: TResponse;
 }
 
-export type OnSubscribeHandlerHook<T, M extends ClientID> = (
-  eventType: T,
-  microfrontendID: M,
-) => void;
+export type OnSubscribeHandlerHook<T> = (eventType: T, clientID: ClientID) => void;
 
 export type BeforeSendHook<T extends string, P extends Record<T, any>> = (
   event: Readonly<Event<T, P[T]>>,
@@ -80,7 +90,7 @@ export type BeforeSendHook<T extends string, P extends Record<T, any>> = (
 
 export type AfterSendHook<T extends string, P extends Record<T, any>> = (
   event: Readonly<Event<T, P[T]>>,
-  result: { success: boolean; handled: boolean },
+  eventResult: EventResult,
 ) => void;
 
 /**
@@ -117,11 +127,27 @@ export interface Client<T extends string = string, P = any> {
 // =============================================================================
 
 /**
- * Hook для EventBroker - позволяет подключить дополнительную функциональность
+ * EventBroker hook function - enables pluggable functionality
  *
- * @param broker - экземпляр EventBroker
- * @returns cleanup функция для отключения хука
+ * Hooks receive the broker instance and can register custom logic for:
+ * - Access control and validation
+ * - Logging and observability
+ * - Metrics and monitoring
+ * - Custom event processing
+ *
+ * @param broker - EventBroker instance
+ * @returns Cleanup function to unregister the hook
+ *
+ * @example
+ * ```typescript
+ * const loggingHook: EventBrokerHook = (broker) => {
+ *   const cleanup = broker.useAfterSendHook((event) => {
+ *     console.log('Event sent:', event.type);
+ *   });
+ *   return cleanup;
+ * };
+ * ```
  */
-export type EventBrokerHook<T extends string, P extends Record<T, any>, C extends string> = (
-  broker: any, // EventBroker<T, P, C> - avoid circular dependency
+export type EventBrokerHook<T extends string, P extends Record<T, any>> = (
+  broker: any, // EventBroker<T, P> - avoid circular dependency
 ) => () => void;

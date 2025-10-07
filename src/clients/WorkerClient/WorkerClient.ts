@@ -10,10 +10,10 @@ export class WorkerClient<T extends string, P = any> implements Client<T, P> {
   static readonly clientType = 'WorkerClient' as const;
 
   readonly id: ClientID;
-  #broker: EventBroker<T, any, any>;
+  #broker: EventBroker<T, any>;
   #worker: Worker;
 
-  constructor(id: ClientID, broker: EventBroker<T, any, any>, worker: Worker) {
+  constructor(id: ClientID, broker: EventBroker<T, any>, worker: Worker) {
     this.id = id;
     this.#broker = broker;
     this.#worker = worker;

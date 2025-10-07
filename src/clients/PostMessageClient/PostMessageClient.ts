@@ -24,13 +24,13 @@ export class PostMessageClient<T extends string, P = any> implements Client<T, P
   static readonly clientType = 'PostMessageClient' as const;
 
   readonly id: ClientID;
-  #broker: EventBroker<T, any, any>;
+  #broker: EventBroker<T, any>;
   #targetWindow: Window;
   #targetOrigin: string;
 
   constructor(
     id: ClientID,
-    broker: EventBroker<T, any, any>,
+    broker: EventBroker<T, any>,
     targetWindow: Window,
     targetOrigin: string = '*',
   ) {

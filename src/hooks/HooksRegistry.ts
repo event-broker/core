@@ -28,10 +28,9 @@ import type {
  *
  * @template T - Event type union
  * @template P - Payload map
- * @template M - Client ID type
  */
-export class HooksRegistry<T extends string, P extends Record<T, any>, M extends ClientID> {
-  #onSubscribeHooks = new HookCollection<OnSubscribeHandlerHook<T, M>>();
+export class HooksRegistry<T extends string, P extends Record<T, any>> {
+  #onSubscribeHooks = new HookCollection<OnSubscribeHandlerHook<T>>();
   #beforeSendHooks = new HookCollection<BeforeSendHook<T, P>>();
   #afterSendHooks = new HookCollection<AfterSendHook<T, P>>();
   #brokerHookCleanups = new HookCollection<() => void>();
@@ -44,9 +43,7 @@ export class HooksRegistry<T extends string, P extends Record<T, any>, M extends
    * @param hook - Single hook or array of hooks
    * @returns Cleanup function to remove the hook(s)
    */
-  addOnSubscribeHandler(
-    hook: OnSubscribeHandlerHook<T, M> | OnSubscribeHandlerHook<T, M>[],
-  ): () => void {
+  addOnSubscribeHandler(hook: OnSubscribeHandlerHook<T> | OnSubscribeHandlerHook<T>[]): () => void {
     return this.#onSubscribeHooks.add(hook);
   }
 
@@ -85,7 +82,7 @@ export class HooksRegistry<T extends string, P extends Record<T, any>, M extends
    * @returns Cleanup function to remove all plugin hooks
    */
   registerEventBrokerHooks(
-    hooks: EventBrokerHook<T, P, M> | Array<EventBrokerHook<T, P, M>>,
+    hooks: EventBrokerHook<T, P> | Array<EventBrokerHook<T, P>>,
     broker: any, // EventBroker instance
   ): () => void {
     const hooksList = Array.isArray(hooks) ? hooks : [hooks];
@@ -113,10 +110,10 @@ export class HooksRegistry<T extends string, P extends Record<T, any>, M extends
    * Execute onSubscribe hooks
    *
    * @param eventType - Event type being subscribed to
-   * @param microfrontendID - Client ID subscribing
+   * @param clientID - Client ID subscribing
    */
-  onSubscribe(eventType: T, microfrontendID: M): void {
-    this.#onSubscribeHooks.run((hook) => hook(eventType, microfrontendID));
+  onSubscribe(eventType: T, clientID: ClientID): void {
+    this.#onSubscribeHooks.run((hook) => hook(eventType, clientID));
   }
 
   /**
@@ -133,10 +130,10 @@ export class HooksRegistry<T extends string, P extends Record<T, any>, M extends
    * Execute afterSend hooks
    *
    * @param event - Event that was sent
-   * @param result - Delivery result (success/handled status)
+   * @param eventResult - Full EventResult from recipient
    */
-  afterSend(event: Readonly<Event<T, P[T]>>, result: { success: boolean; handled: boolean }): void {
-    this.#afterSendHooks.run((hook) => hook(event, result));
+  afterSend(event: Readonly<Event<T, P[T]>>, eventResult: any): void {
+    this.#afterSendHooks.run((hook) => hook(event, eventResult));
   }
 
   /**

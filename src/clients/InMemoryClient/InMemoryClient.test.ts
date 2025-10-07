@@ -8,7 +8,7 @@ type TestPayloads = {
 };
 
 describe('InMemoryClient', () => {
-  let broker: EventBroker<TestEvents, TestPayloads, string>;
+  let broker: EventBroker<TestEvents, TestPayloads>;
 
   beforeEach(() => {
     broker = new EventBroker();
@@ -135,7 +135,7 @@ describe('InMemoryClient', () => {
     client.on('test.event.v1', handler);
     expect(broker.getSubscribedClients()).toContain('test-client');
 
-    client.off('test.event.v1', handler);
+    client.off('test.event.v1');
     expect(broker.getSubscriptions()['test-client']).toEqual([]);
   });
 

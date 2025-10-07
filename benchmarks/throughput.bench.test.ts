@@ -12,7 +12,7 @@ type TestEvents = {
 };
 
 describe('EventBroker Performance Benchmarks', () => {
-  let broker: EventBroker<keyof TestEvents, TestEvents, string>;
+  let broker: EventBroker<keyof TestEvents, TestEvents>;
   let client1: any;
   let client2: any;
 

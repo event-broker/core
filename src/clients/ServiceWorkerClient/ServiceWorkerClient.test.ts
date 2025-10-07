@@ -8,7 +8,7 @@ type TestPayloads = {
 };
 
 describe('ServiceWorkerClient', () => {
-  let broker: EventBroker<TestEvents, TestPayloads, string>;
+  let broker: EventBroker<TestEvents, TestPayloads>;
   let mockServiceWorker: any;
   let mockNavigator: any;
 

@@ -27,10 +27,10 @@ export class ServiceWorkerClient<T extends string, P = any> implements Client<T,
   static readonly clientType = 'ServiceWorkerClient' as const;
 
   readonly id: ClientID;
-  #broker: EventBroker<T, any, any>;
+  #broker: EventBroker<T, any>;
   #serviceWorker: ServiceWorker;
 
-  constructor(id: ClientID, broker: EventBroker<T, any, any>, serviceWorker: ServiceWorker) {
+  constructor(id: ClientID, broker: EventBroker<T, any>, serviceWorker: ServiceWorker) {
     this.id = id;
     this.#broker = broker;
     this.#serviceWorker = serviceWorker;

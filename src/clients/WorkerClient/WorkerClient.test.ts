@@ -9,12 +9,12 @@ type TestEventPayloads = {
 };
 
 describe('WorkerClient', () => {
-  let broker: EventBroker<TestEventType, TestEventPayloads, string>;
+  let broker: EventBroker<TestEventType, TestEventPayloads>;
   let client: WorkerClient<TestEventType>;
   let mockWorker: any;
 
   beforeEach(() => {
-    broker = new EventBroker<TestEventType, TestEventPayloads, string>();
+    broker = new EventBroker<TestEventType, TestEventPayloads>();
 
     // Create mock Worker
     mockWorker = {

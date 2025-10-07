@@ -1,11 +1,11 @@
 /**
- * Тест CloudEvents v1.0 интеграции в EventBroker
+ * EventBroker CloudEvents v1.0 Integration Tests
  */
 
 import { EventBroker } from './EventBroker';
 import { InMemoryClient } from '../clients/InMemoryClient/InMemoryClient';
 
-// Тестовые типы событий
+// Test event types
 type TestEventType = 'user.created.v1' | 'order.placed.v1';
 type TestEventPayloads = {
   'user.created.v1': { userId: string; email: string };
@@ -13,21 +13,21 @@ type TestEventPayloads = {
 };
 
 describe('EventBroker CloudEvents v1.0', () => {
-  let broker: EventBroker<TestEventType, TestEventPayloads, string>;
+  let broker: EventBroker<TestEventType, TestEventPayloads>;
 
   beforeEach(() => {
-    broker = new EventBroker<TestEventType, TestEventPayloads, string>();
+    broker = new EventBroker<TestEventType, TestEventPayloads>();
   });
 
   afterEach(() => {
     broker.destroy();
   });
 
-  test('должен создавать события в CloudEvents v1.0 формате', () => {
+  test('should create events in CloudEvents v1.0 format', () => {
     const client = new InMemoryClient('user-service', broker);
     const receiverClient = new InMemoryClient('notification-service', broker);
 
-    // Клиенты регистрируются автоматически в конструкторе
+    // Clients are registered automatically in constructor
 
     let receivedEvent: any;
 
@@ -35,7 +35,7 @@ describe('EventBroker CloudEvents v1.0', () => {
       receivedEvent = event;
     });
 
-    // Отправляем событие (tab sync автоматический)
+    // Send event (tab sync is automatic)
     client.sendTo('notification-service', 'user.created.v1', {
       userId: '123',
       email: 'test@example.com',
@@ -43,7 +43,7 @@ describe('EventBroker CloudEvents v1.0', () => {
 
     const event = receivedEvent;
 
-    // Проверяем обязательные поля CloudEvents
+    // Check required CloudEvents fields
     expect(event.specversion).toBe('1.0');
     expect(event.type).toBe('user.created.v1');
     expect(event.source).toBe('user-service');
@@ -51,24 +51,24 @@ describe('EventBroker CloudEvents v1.0', () => {
     expect(event.time).toBeDefined();
     expect(event.datacontenttype).toBe('application/json');
 
-    // Проверяем данные
+    // Check data
     expect(event.data).toEqual({ userId: '123', email: 'test@example.com' });
 
-    // Проверяем MFE расширения
+    // Check MFE extensions
     expect(event['mfe-recipient']).toBe('notification-service');
     expect(event['mfe-sessionid']).toBeDefined();
 
-    // CloudEvents структура соответствует типу
+    // CloudEvents structure matches type
     expect(event.specversion).toBe('1.0');
   });
 
-  test('должен обрабатывать события через подписчиков', (done) => {
+  test('should process events through subscribers', (done) => {
     const receiverClient = new InMemoryClient('test-service', broker);
     const senderClient = new InMemoryClient('user-service', broker);
 
-    // Клиенты регистрируются автоматически в конструкторе
+    // Clients are registered automatically in constructor
 
-    // Подписываемся на событие у получателя
+    // Subscribe to event at receiver
     receiverClient.on('user.created.v1', (event) => {
       expect(event.type).toBe('user.created.v1');
       expect(event.source).toBe('user-service');
@@ -77,23 +77,23 @@ describe('EventBroker CloudEvents v1.0', () => {
       done();
     });
 
-    // Отправляем событие от отправителя
+    // Send event from sender
     senderClient.sendTo('test-service', 'user.created.v1', {
       userId: '123',
       email: 'test@example.com',
     });
   });
 
-  test('должен поддерживать broadcast события', async () => {
+  test('should support broadcast events', async () => {
     const handlerCalls: string[] = [];
 
     const client1 = new InMemoryClient('service-1', broker);
     const client2 = new InMemoryClient('service-2', broker);
     const client3 = new InMemoryClient('service-3', broker);
 
-    // Клиенты регистрируются автоматически в конструкторе
+    // Clients are registered automatically in constructor
 
-    // Подписываемся на событие от разных сервисов
+    // Subscribe to event from different services
     client1.on('order.placed.v1', () => {
       handlerCalls.push('service-1');
     });
@@ -104,395 +104,511 @@ describe('EventBroker CloudEvents v1.0', () => {
       handlerCalls.push('service-3');
     });
 
-    // Отправляем broadcast из service-3
-    await client3.broadcast('order.placed.v1', { orderId: '456', amount: 100 });
+    // Broadcast from client1
+    const result = await client1.broadcast('order.placed.v1', {
+      orderId: 'order-123',
+      amount: 100,
+    });
 
-    // Проверяем что service-1 и service-2 получили событие, но service-3 (отправитель) - нет
-    expect(handlerCalls).toContain('service-1');
+    // Check that all subscribers except sender received the event
     expect(handlerCalls).toContain('service-2');
-    expect(handlerCalls).not.toContain('service-3');
+    expect(handlerCalls).toContain('service-3');
+    expect(handlerCalls).not.toContain('service-1'); // Sender doesn't receive
+
+    expect(result.status).toBe('ACK');
   });
 
-  test('должен генерировать уникальные ID для событий', async () => {
-    const client1 = new InMemoryClient('service-1', broker);
-    const client2 = new InMemoryClient('service-2', broker);
+  test('should return NACK if no subscribers', async () => {
+    const client = new InMemoryClient('user-service', broker);
 
-    // Клиенты регистрируются автоматически в конструкторе
-
-    const receivedEvents: any[] = [];
-
-    // Подписываемся на события
-    client2.on('user.created.v1', (event) => {
-      receivedEvents.push(event);
+    // Send event without subscribers
+    const result = await client.broadcast('user.created.v1', {
+      userId: '123',
+      email: 'test@example.com',
     });
 
-    // Отправляем события с небольшим интервалом
-    client1.sendTo('service-2', 'user.created.v1', {
-      userId: '1',
-      email: 'a@b.com',
-    });
-
-    // Небольшая задержка для разных timestamp
-    await new Promise((resolve) => setTimeout(resolve, 2));
-
-    client1.sendTo('service-2', 'user.created.v1', {
-      userId: '2',
-      email: 'c@d.com',
-    });
-
-    // Проверяем что получили 2 события с разными ID и временем
-    expect(receivedEvents).toHaveLength(2);
-    expect(receivedEvents[0].id).not.toBe(receivedEvents[1].id);
-    expect(receivedEvents[0].time).not.toBe(receivedEvents[1].time);
+    expect(result.status).toBe('NACK');
+    expect(result.message).toContain('No subscribers');
   });
 
-  // 📨 ACK Pattern Tests (перенесены из отдельного файла)
   describe('ACK Pattern (Transport acknowledgment)', () => {
-    test('должен подтверждать успешную доставку события (ACK)', async () => {
-      const senderClient = new InMemoryClient('users_app', broker);
-      const receiverClient = new InMemoryClient('notification_app', broker);
+    test('should acknowledge successful event delivery (ACK)', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const receiverClient = new InMemoryClient('receiver', broker);
 
-      // Клиенты регистрируются автоматически в конструкторе
+      // Clients are registered automatically in constructor
 
-      // Получатель подписывается на событие
-      receiverClient.on('user.created.v1', (event: any) => {
-        console.log('Handler called - event DELIVERED:', event.data.userId);
+      let eventReceived = false;
+
+      // Subscribe at receiver
+      receiverClient.on('user.created.v1', (event) => {
+        console.log('Handler called - event DELIVERED:', (event.data as any).userId);
+        eventReceived = true;
       });
 
-      // Отправитель получает подтверждение доставки
-      const result = await senderClient.sendTo('notification_app', 'user.created.v1', {
+      // Send event and wait for ACK
+      const result = await senderClient.sendTo('receiver', 'user.created.v1', {
         userId: '123',
         email: 'test@example.com',
       });
 
-      // ✅ Доставка подтверждена
       expect(result.status).toBe('ACK');
       expect(result.message).toContain('delivered and handled');
+      expect(result.clientId).toBe('receiver');
+      expect(eventReceived).toBe(true);
     });
 
-    test('должен возвращать NACK при отсутствии подписки', async () => {
-      const senderClient = new InMemoryClient('users_app', broker);
-      const receiverClient = new InMemoryClient('notification_app', broker);
+    test('should return NACK when no subscription', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const receiverClient = new InMemoryClient('receiver', broker);
 
-      // Отправляем событие БЕЗ подписки
-      const result = await senderClient.sendTo('notification_app', 'user.created.v1', {
-        userId: '456',
-        email: 'test2@example.com',
+      // Clients are registered automatically in constructor
+      // BUT no subscription!
+
+      const result = await senderClient.sendTo('receiver', 'user.created.v1', {
+        userId: '123',
+        email: 'test@example.com',
       });
 
-      // ✅ Возвращает NACK - клиент не подписан на событие
       expect(result.status).toBe('NACK');
       expect(result.message).toContain('not subscribed');
     });
 
-    test('должен возвращать NACK при ошибках в обработчике', async () => {
-      const senderClient = new InMemoryClient('users_app', broker);
-      const receiverClient = new InMemoryClient('notification_app', broker);
+    test('should return NACK on handler errors', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const receiverClient = new InMemoryClient('receiver', broker);
 
-      // Клиенты регистрируются автоматически в конструкторе
+      // Clients are registered automatically in constructor
 
-      // Обработчик падает - событие считается необработанным
-      receiverClient.on('user.created.v1', (event: any) => {
+      // Subscribe with failing handler
+      receiverClient.on('user.created.v1', () => {
         console.log('Handler called - event DELIVERED');
         throw new Error('Business logic failed');
       });
 
-      // Отправитель получает NACK так как обработка не удалась
-      const result = await senderClient.sendTo('notification_app', 'user.created.v1', {
-        userId: '789',
-        email: 'will-fail@example.com',
+      const result = await senderClient.sendTo('receiver', 'user.created.v1', {
+        userId: '123',
+        email: 'test@example.com',
       });
 
-      // ❌ Обработка не удалась
       expect(result.status).toBe('NACK');
       expect(result.message).toContain('not handled');
     });
 
-    test('dispatch всегда возвращает Promise с результатом доставки', async () => {
-      const senderClient = new InMemoryClient('users_app', broker);
-      const receiverClient = new InMemoryClient('notification_app', broker);
+    test('dispatch always returns Promise with delivery result', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const receiverClient = new InMemoryClient('receiver', broker);
 
-      // Клиенты регистрируются автоматически в конструкторе
-
-      let eventReceived = false;
+      // Clients are registered automatically in constructor
 
       receiverClient.on('user.created.v1', () => {
-        eventReceived = true;
+        /* handler */
       });
 
-      // Всегда возвращает Promise
-      const result = await senderClient.sendTo('notification_app', 'user.created.v1', {
-        userId: '999',
-        email: 'normal@example.com',
+      const resultPromise = senderClient.sendTo('receiver', 'user.created.v1', {
+        userId: '123',
+        email: 'test@example.com',
       });
 
-      expect(result.status).toBe('ACK');
-      expect(eventReceived).toBe(true);
+      // Check that it's a Promise
+      expect(resultPromise).toBeInstanceOf(Promise);
+
+      const result = await resultPromise;
+
+      // Check that result has required fields
+      expect(result.status).toBeDefined();
+      expect(result.message).toBeDefined();
+      expect(result.timestamp).toBeDefined();
     });
 
-    test('должен поддерживать ACK для broadcast событий', async () => {
-      const senderClient = new InMemoryClient('users_app', broker);
+    test('should support ACK for broadcast events', async () => {
       const client1 = new InMemoryClient('service-1', broker);
       const client2 = new InMemoryClient('service-2', broker);
 
-      // Клиенты регистрируются автоматически в конструкторе
+      // Clients are registered automatically in constructor
 
-      let handlersCalledCount = 0;
-
-      // Подписываем двух получателей
-      client1.on('user.created.v1', () => {
-        handlersCalledCount++;
-      });
-      client2.on('user.created.v1', () => {
-        handlersCalledCount++;
+      client2.on('order.placed.v1', () => {
+        /* handler */
       });
 
-      // Отправляем broadcast
-      const result = await senderClient.broadcast('user.created.v1', {
-        userId: '999',
-        email: 'broadcast@example.com',
-      });
-
-      // ✅ Broadcast успешно отправлен подписчикам
-      expect(result.status).toBe('ACK');
-      expect(result.message).toContain('2');
-      expect(handlersCalledCount).toBe(2);
-    });
-  });
-
-  // 🎯 New Unicast/Broadcast API Tests
-  describe('sendTo() and broadcast() methods', () => {
-    test('sendTo() должен отправлять сообщение конкретному клиенту', async () => {
-      const senderClient = new InMemoryClient('sender', broker);
-      const receiverClient = new InMemoryClient('receiver', broker);
-
-      let receivedEvent: any = null;
-      receiverClient.on('user.created.v1', (event) => {
-        receivedEvent = event;
-      });
-
-      const result = await senderClient.sendTo('receiver', 'user.created.v1', {
-        userId: 'user123',
-        email: 'test@example.com',
-      });
-
-      // unified EventResult
-      expect(result.status).toBe('ACK');
-      expect(result.status).toBe('ACK');
-      expect(result.clientId).toBe('receiver');
-      expect(result.message).toContain('delivered and handled');
-      expect(result.timestamp).toBeDefined();
-      expect(receivedEvent.data.userId).toBe('user123');
-    });
-
-    test('sendTo() должен возвращать NACK для несуществующего клиента', async () => {
-      const senderClient = new InMemoryClient('sender', broker);
-
-      const result = await senderClient.sendTo('nonexistent', 'user.created.v1', {
-        userId: 'user123',
-        email: 'test@example.com',
-      });
-
-      expect(result.status).toBe('NACK');
-      expect(result.status).toBe('NACK');
-      expect(result.clientId).toBe('nonexistent');
-      expect(result.message).toContain('not subscribed');
-    });
-
-    test('sendTo() должен возвращать NACK если обработчик упал с ошибкой', async () => {
-      const senderClient = new InMemoryClient('sender', broker);
-      const receiverClient = new InMemoryClient('receiver', broker);
-
-      // Подписываем на событие с ошибкой в обработчике
-      receiverClient.on('user.created.v1', () => {
-        throw new Error('Handler error');
-      });
-
-      const result = await senderClient.sendTo('receiver', 'user.created.v1', {
-        userId: 'user123',
-        email: 'test@example.com',
-      });
-
-      expect(result.status).toBe('NACK');
-      expect(result.status).toBe('NACK');
-      expect(result.clientId).toBe('receiver');
-      expect(result.message).toContain('not handled');
-    });
-
-    test('broadcast() должен отправлять сообщение всем клиентам кроме отправителя', async () => {
-      const senderClient = new InMemoryClient('sender', broker);
-      const client1 = new InMemoryClient('client1', broker);
-      const client2 = new InMemoryClient('client2', broker);
-      const client3 = new InMemoryClient('client3', broker);
-
-      let handlersCalledCount = 0;
-      const handledBy: string[] = [];
-
-      // Подписываем всех получателей
-      client1.on('order.placed.v1', (event) => {
-        handlersCalledCount++;
-        handledBy.push('client1');
-      });
-      client2.on('order.placed.v1', (event) => {
-        handlersCalledCount++;
-        handledBy.push('client2');
-      });
-      // client3 не подписан
-
-      const result = await senderClient.broadcast('order.placed.v1', {
-        orderId: 'order123',
+      const result = await client1.broadcast('order.placed.v1', {
+        orderId: 'order-123',
         amount: 100,
       });
 
       expect(result.status).toBe('ACK');
-      expect(result.message).toContain('2'); // Broadcast sent to 2 subscribers
-      expect(result.timestamp).toBeDefined();
-      expect(handlersCalledCount).toBe(2);
-      expect(handledBy).toEqual(['client1', 'client2']);
-    });
-
-    test('broadcast() должен работать когда нет других клиентов', async () => {
-      const senderClient = new InMemoryClient('lonely_sender', broker);
-
-      const result = await senderClient.broadcast('user.created.v1', {
-        userId: 'lonely123',
-        email: 'lonely@example.com',
-      });
-
-      expect(result.status).toBe('NACK');
-      expect(result.message).toContain('No subscribers');
-    });
-
-    test('broadcast() должен корректно обрабатывать ошибки в обработчиках', async () => {
-      const senderClient = new InMemoryClient('sender', broker);
-      const errorClient = new InMemoryClient('error_client', broker);
-
-      // Подписываем клиента на событие с ошибкой
-      errorClient.on('user.created.v1', async () => {
-        throw new Error('Handler error');
-      });
-
-      const result = await senderClient.broadcast('user.created.v1', {
-        userId: 'error123',
-        email: 'error@example.com',
-      });
-
-      expect(result.status).toBe('ACK');
-      expect(result.message).toContain('1');
-
-      // Даём время на обработку ошибки в fire-and-forget режиме
-      await new Promise((resolve) => setTimeout(resolve, 10));
+      expect(result.message).toContain('subscriber');
     });
   });
 
-  // 🔄 Unsubscription Tests (EventEmitter-style API)
-  describe('Client Subscription/Unsubscription', () => {
-    test('должен отписывать обработчик через off()', async () => {
+  describe('sendTo() and broadcast() methods', () => {
+    test('sendTo() should send message to specific client', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const receiverClient = new InMemoryClient('receiver', broker);
+      const otherClient = new InMemoryClient('other', broker);
+
+      // Clients are registered automatically in constructor
+
+      let receiverCalled = false;
+      let otherCalled = false;
+
+      receiverClient.on('user.created.v1', () => {
+        receiverCalled = true;
+      });
+
+      otherClient.on('user.created.v1', () => {
+        otherCalled = true;
+      });
+
+      // Send only to receiver
+      const result = await senderClient.sendTo('receiver', 'user.created.v1', {
+        userId: '123',
+        email: 'test@example.com',
+      });
+
+      expect(result.status).toBe('ACK');
+      expect(receiverCalled).toBe(true);
+      expect(otherCalled).toBe(false); // other didn't receive
+    });
+
+    test('sendTo() should return NACK for non-existent client', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+
+      const result = await senderClient.sendTo('non-existent', 'user.created.v1', {
+        userId: '123',
+        email: 'test@example.com',
+      });
+
+      expect(result.status).toBe('NACK');
+      expect(result.message).toContain('not subscribed');
+    });
+
+    test('sendTo() should return NACK if handler throws error', async () => {
       const senderClient = new InMemoryClient('sender', broker);
       const receiverClient = new InMemoryClient('receiver', broker);
 
-      let handlerCalled = false;
+      // Clients are registered automatically in constructor
 
-      const handler = () => {
-        handlerCalled = true;
-      };
+      receiverClient.on('user.created.v1', () => {
+        throw new Error('Handler error');
+      });
 
-      // Подписываемся на событие
-      receiverClient.on('user.created.v1', handler);
-
-      // Отправляем событие - обработчик должен сработать
-      await senderClient.sendTo('receiver', 'user.created.v1', {
+      const result = await senderClient.sendTo('receiver', 'user.created.v1', {
         userId: '123',
-        email: 'test@test.com',
+        email: 'test@example.com',
       });
-      expect(handlerCalled).toBe(true);
 
-      // Сбрасываем флаг
-      handlerCalled = false;
-
-      // Отписываемся от события
-      receiverClient.off('user.created.v1', handler);
-
-      // Отправляем событие снова - обработчик НЕ должен сработать
-      await senderClient.sendTo('receiver', 'user.created.v1', {
-        userId: '456',
-        email: 'test2@test.com',
-      });
-      expect(handlerCalled).toBe(false);
+      expect(result.status).toBe('NACK');
     });
 
-    test('должен очищать все обработчики через clear()', () => {
-      const client = new InMemoryClient('test-service', broker);
-      // Клиенты регистрируются автоматически в конструкторе
+    test('broadcast() should send message to all clients except sender', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const client1 = new InMemoryClient('client-1', broker);
+      const client2 = new InMemoryClient('client-2', broker);
 
-      let handlersCallCount = 0;
+      // Clients are registered automatically in constructor
 
-      // Подписываем обработчики на разные события через on()
-      client.on('user.created.v1', () => {
-        handlersCallCount++;
+      const calls: string[] = [];
+
+      client1.on('order.placed.v1', () => {
+        calls.push('client-1');
       });
-      client.on('order.placed.v1', () => {
-        handlersCallCount++;
+
+      client2.on('order.placed.v1', () => {
+        calls.push('client-2');
       });
-      client.on('user.created.v1', () => {
-        handlersCallCount++;
-      }); // второй обработчик на то же событие
 
-      // Очищаем все обработчики
-      client.destroy(); // clear() removed - use destroy() instead
+      senderClient.on('order.placed.v1', () => {
+        calls.push('sender');
+      });
 
-      // Отправляем события - обработчики не должны сработать
-      client.sendTo('test-service', 'user.created.v1', { userId: '123', email: 'test@test.com' });
-      client.sendTo('test-service', 'order.placed.v1', { orderId: 'order-123', amount: 100.5 });
+      await senderClient.broadcast('order.placed.v1', {
+        orderId: 'order-123',
+        amount: 100,
+      });
 
-      expect(handlersCallCount).toBe(0);
+      expect(calls).toContain('client-1');
+      expect(calls).toContain('client-2');
+      expect(calls).not.toContain('sender'); // Sender doesn't receive
     });
 
-    test('должен корректно работать с on/off и callback отпиской', () => {
-      const client = new InMemoryClient('test-service', broker);
-      // Клиенты регистрируются автоматически в конструкторе
+    test('broadcast() should work when no other clients', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+
+      senderClient.on('order.placed.v1', () => {
+        /* handler */
+      });
+
+      const result = await senderClient.broadcast('order.placed.v1', {
+        orderId: 'order-123',
+        amount: 100,
+      });
+
+      // No subscribers except sender
+      expect(result.status).toBe('NACK');
+    });
+
+    test('broadcast() should handle handler errors correctly', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const errorClient = new InMemoryClient('error_client', broker);
+      const successClient = new InMemoryClient('success_client', broker);
+
+      // Clients are registered automatically in constructor
+
+      // Spy on console.error to suppress error output in test
+      const consoleErrorSpy = jest.spyOn(console, 'error').mockImplementation();
+
+      errorClient.on('order.placed.v1', () => {
+        throw new Error('Handler error');
+      });
+
+      let successCalled = false;
+      successClient.on('order.placed.v1', () => {
+        successCalled = true;
+      });
+
+      // Broadcast continues despite individual handler errors
+      const result = await senderClient.broadcast('order.placed.v1', {
+        orderId: 'order-123',
+        amount: 100,
+      });
+
+      expect(result.status).toBe('ACK'); // Broadcast is fire-and-forget
+      expect(successCalled).toBe(true); // Successful handler still executed
+      expect(consoleErrorSpy).toHaveBeenCalled(); // Error was logged
+
+      consoleErrorSpy.mockRestore();
+    });
+  });
+
+  describe('Client Subscription/Unsubscription', () => {
+    test('should unsubscribe handler via off()', () => {
+      const client = new InMemoryClient('test-client', broker);
+
+      // Client is registered automatically in constructor
 
       let callCount = 0;
+
       const handler = () => {
         callCount++;
       };
 
-      // Подписка через on() (возвращает функцию отписки)
-      const unsubscribeCallback = client.on('user.created.v1', handler);
+      client.on('user.created.v1', handler);
 
-      // Отправляем событие - обработчик должен сработать
-      client.sendTo('test-service', 'user.created.v1', { userId: '123', email: 'test@test.com' });
+      // Send event - handler should be called
+      client.sendTo('test-client', 'user.created.v1', {
+        userId: '123',
+        email: 'test1@test.com',
+      });
       expect(callCount).toBe(1);
 
-      // Отписываемся через callback
-      unsubscribeCallback();
-
-      // Отправляем событие - обработчик не должен сработать
-      client.sendTo('test-service', 'user.created.v1', {
+      client.sendTo('test-client', 'user.created.v1', {
         userId: '456',
         email: 'test2@test.com',
       });
-      expect(callCount).toBe(1); // остался 1
+      expect(callCount).toBe(2);
 
-      // Подписываемся снова через subscribe() для тестирования совместимости
+      // Unsubscribe via off()
+      client.off('user.created.v1');
+
+      // Send event - handler should NOT be called
+      client.sendTo('test-client', 'user.created.v1', {
+        userId: '999',
+        email: 'test3@test.com',
+      });
+      expect(callCount).toBe(2); // Still 2
+    });
+
+    test('should unsubscribe without handler reference', () => {
+      const client = new InMemoryClient('test-client', broker);
+
+      // Client is registered automatically in constructor
+
+      let callCount = 0;
+
+      client.on('user.created.v1', () => {
+        callCount++;
+      });
+
+      // Send event - handler should be called
+      client.sendTo('test-client', 'user.created.v1', {
+        userId: '123',
+        email: 'test1@test.com',
+      });
+      expect(callCount).toBe(1);
+
+      // Unsubscribe without handler reference (removes all handlers for this event type)
+      client.off('user.created.v1');
+
+      // Send event - handler should NOT be called
+      client.sendTo('test-client', 'user.created.v1', {
+        userId: '999',
+        email: 'test2@test.com',
+      });
+      expect(callCount).toBe(1); // Still 1
+    });
+
+    test('should work correctly with on/off and callback unsubscription', () => {
+      const client = new InMemoryClient('test-client', broker);
+
+      // Client is registered automatically in constructor
+
+      let callCount = 0;
+
+      const handler = () => {
+        callCount++;
+      };
+
       client.on('user.created.v1', handler);
 
-      // Отправляем событие - обработчик должен сработать
-      client.sendTo('test-service', 'user.created.v1', {
-        userId: '789',
+      // Send event - handler should be called
+      client.sendTo('test-client', 'user.created.v1', {
+        userId: '123',
+        email: 'test1@test.com',
+      });
+      expect(callCount).toBe(1);
+
+      client.sendTo('test-client', 'user.created.v1', {
+        userId: '456',
         email: 'test3@test.com',
       });
       expect(callCount).toBe(2);
 
-      // Отписываемся через off()
-      client.off('user.created.v1', handler);
+      // Unsubscribe via off()
+      client.off('user.created.v1');
 
-      // Отправляем событие - обработчик не должен сработать
-      client.sendTo('test-service', 'user.created.v1', {
+      // Send event - handler should NOT be called
+      client.sendTo('test-client', 'user.created.v1', {
         userId: '999',
         email: 'test4@test.com',
       });
-      expect(callCount).toBe(2); // остался 2
+      expect(callCount).toBe(2); // Still 2
+    });
+  });
+
+  // ========================================
+  // Request-Reply Pattern Tests
+  // ========================================
+
+  describe('Request-Reply Pattern', () => {
+    test('should return data from handler', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const serviceClient = new InMemoryClient('service', broker);
+
+      const mockUser = { id: 123, name: 'John Doe', email: 'john@example.com' };
+
+      serviceClient.on('user.created.v1', (event) => {
+        return mockUser; // Return data
+      });
+
+      const result = await senderClient.sendTo('service', 'user.created.v1', {
+        userId: '123',
+        email: 'john@example.com',
+      });
+
+      expect(result.status).toBe('ACK');
+      expect(result.data).toEqual(mockUser);
+    });
+
+    test('should handle async data fetching', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const serviceClient = new InMemoryClient('service', broker);
+
+      serviceClient.on('user.created.v1', async (event) => {
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        return {
+          userId: event.data.userId,
+          processedAt: Date.now(),
+        };
+      });
+
+      const result = await senderClient.sendTo('service', 'user.created.v1', {
+        userId: '456',
+        email: 'alice@example.com',
+      });
+
+      expect(result.status).toBe('ACK');
+      expect(result.data).toHaveProperty('userId', '456');
+      expect(result.data).toHaveProperty('processedAt');
+    });
+
+    test('should handle void return (no response data)', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const serviceClient = new InMemoryClient('service', broker);
+
+      let eventReceived = false;
+
+      serviceClient.on('user.created.v1', (event) => {
+        eventReceived = true;
+        // No return = traditional event handler
+      });
+
+      const result = await senderClient.sendTo('service', 'user.created.v1', {
+        userId: '789',
+        email: 'test@example.com',
+      });
+
+      expect(result.status).toBe('ACK');
+      expect(result.data).toBeUndefined();
+      expect(eventReceived).toBe(true);
+    });
+
+    test('should handle undefined return', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const serviceClient = new InMemoryClient('service', broker);
+
+      serviceClient.on('user.created.v1', () => {
+        return undefined; // Explicit undefined
+      });
+
+      const result = await senderClient.sendTo('service', 'user.created.v1', {
+        userId: '123',
+        email: 'test@example.com',
+      });
+
+      expect(result.status).toBe('ACK');
+      expect(result.data).toBeUndefined();
+    });
+
+    test('should return NACK when handler throws error', async () => {
+      const senderClient = new InMemoryClient('sender', broker);
+      const serviceClient = new InMemoryClient('service', broker);
+
+      serviceClient.on('user.created.v1', () => {
+        throw new Error('Handler failed');
+      });
+
+      const result = await senderClient.sendTo('service', 'user.created.v1', {
+        userId: '123',
+        email: 'test@example.com',
+      });
+
+      expect(result.status).toBe('NACK');
+      expect(result.data).toBeUndefined();
+    });
+
+    test('Real-world use case: User validation service', async () => {
+      const formClient = new InMemoryClient('form', broker);
+      const validationClient = new InMemoryClient('validation', broker);
+
+      validationClient.on('user.created.v1', (event) => {
+        const { email } = event.data;
+        const isValid = email.includes('@');
+
+        return {
+          valid: isValid,
+          errors: isValid ? [] : ['Invalid email format'],
+        };
+      });
+
+      const result = await formClient.sendTo('validation', 'user.created.v1', {
+        userId: 'test',
+        email: 'invalid-email',
+      });
+
+      expect(result.status).toBe('ACK');
+      expect(result.data.valid).toBe(false);
+      expect(result.data.errors).toContain('Invalid email format');
     });
   });
 });

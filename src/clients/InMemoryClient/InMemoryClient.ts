@@ -18,9 +18,9 @@ export class InMemoryClient<T extends string, P extends Record<T, any>, M extend
   static readonly clientType = 'InMemoryClient' as const;
 
   readonly id: M;
-  #broker: EventBroker<T, P, M>;
+  #broker: EventBroker<T, P>;
 
-  constructor(sender: M, broker: EventBroker<T, P, M>) {
+  constructor(sender: M, broker: EventBroker<T, P>) {
     this.id = sender;
     this.#broker = broker;
 
@@ -61,6 +61,8 @@ export class InMemoryClient<T extends string, P extends Record<T, any>, M extend
   /**
    * Subscribe to event type with custom handler
    * Handler is required for InMemoryClient (unlike transport clients)
+   *
+   * Note: Only one handler per event type. Subsequent calls will replace the previous handler.
    */
   on<K extends T>(eventType: K, handler?: HandlerFn<K, P[K]>): () => void {
     if (!handler) {
@@ -71,15 +73,15 @@ export class InMemoryClient<T extends string, P extends Record<T, any>, M extend
 
     // Return unsubscribe function
     return () => {
-      this.#broker.unsubscribe(this.id, eventType, handler);
+      this.#broker.unsubscribe(this.id, eventType);
     };
   }
 
   /**
    * Unsubscribe from event type
    */
-  off<K extends T>(eventType: K, handler?: HandlerFn<K, P[K]>): void {
-    this.#broker.unsubscribe(this.id, eventType, handler);
+  off<K extends T>(eventType: K): void {
+    this.#broker.unsubscribe(this.id, eventType);
   }
 
   /**

@@ -42,7 +42,7 @@ type Events = {
   'order.placed.v1': { orderId: string; amount: number };
 };
 
-const broker = new EventBroker<keyof Events, Events, string>();
+const broker = new EventBroker<keyof Events, Events>();
 ```
 
 ---
@@ -769,7 +769,7 @@ type Events = {
   'user.updated.v1': { userId: string; changes: Partial<User> };
 };
 
-const broker = new EventBroker<keyof Events, Events, string>();
+const broker = new EventBroker<keyof Events, Events>();
 ```
 
 ### 2. Error Handling

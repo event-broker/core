@@ -17,11 +17,10 @@ import { deepFreeze } from '../utils/deepFreeze';
  *
  * @template T - Event type union (e.g., "user.created.v1" | "order.placed.v1")
  * @template P - Payload map: Record<EventType, PayloadType>
- * @template M - Client ID type (e.g., "dashboard" | "auth" | "analytics")
  */
-export class EventBroker<T extends string, P extends Record<T, any>, M extends ClientID> {
+export class EventBroker<T extends string, P extends Record<T, any>> {
   #sessionId = Math.random().toString(36).substring(2);
-  #hooks = new HooksRegistry<T, P, M>();
+  #hooks = new HooksRegistry<T, P>();
   #tabSync = new TabSync<T, P>(this.#sessionId, (event) => this.#handleTabSyncedEvent(event));
   #subscriptions = new Subscriptions<T>();
   #registeredClients = new Map<ClientID, any>();
@@ -39,7 +38,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    */
   subscribe<K extends T>(clientId: ClientID, eventType: K, handler: Function): void {
     this.#subscriptions.subscribe(clientId, eventType, handler);
-    this.#hooks.onSubscribe(eventType, clientId as M);
+    this.#hooks.onSubscribe(eventType, clientId);
   }
 
   /**
@@ -47,9 +46,8 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    *
    * @param clientId - Unique client identifier
    * @param eventType - Event type to unsubscribe from
-   * @param handler - (Optional) Specific handler to remove
    */
-  unsubscribe<K extends T>(clientId: ClientID, eventType: K, handler?: Function): void {
+  unsubscribe<K extends T>(clientId: ClientID, eventType: K): void {
     this.#subscriptions.unsubscribe(clientId, eventType);
   }
 
@@ -72,7 +70,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    */
   async sendTo<K extends T>(
     eventType: K,
-    sender: M,
+    sender: ClientID,
     recipient: ClientID,
     data: P[K],
     skipSync = false,
@@ -82,7 +80,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
     // Guard 1: Check if beforeSend hook blocks the event
     if (!this.#hooks.beforeSend(deepFreeze(event))) {
       const result = this.#createResult('NACK', 'Event blocked by beforeSend hook', recipient);
-      this.#hooks.afterSend(deepFreeze(event), { success: false, handled: false });
+      this.#hooks.afterSend(deepFreeze(event), result);
       return result;
     }
 
@@ -93,25 +91,26 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
         `Client '${recipient}' not subscribed to '${eventType}'`,
         recipient,
       );
-      this.#hooks.afterSend(deepFreeze(event), { success: false, handled: false });
+      this.#hooks.afterSend(deepFreeze(event), result);
       return result;
     }
 
-    // Execute handler
+    // Execute handler and get response data (for Request-Reply pattern)
     const handler = this.#subscriptions.getHandler(recipient, eventType);
-    const success = await this.#executeHandler(event, handler);
+    const { success, data: responseData } = await this.#executeHandler(event, handler);
 
-    // Build result
+    // Build result with optional response data
     const result = this.#createResult(
       success ? 'ACK' : 'NACK',
       success
         ? `Event delivered and handled by '${recipient}'`
         : `Event not handled by '${recipient}'`,
       recipient,
+      responseData,
     );
 
-    // Post-processing
-    this.#hooks.afterSend(deepFreeze(event), { success, handled: success });
+    // Post-processing - pass full EventResult to hooks
+    this.#hooks.afterSend(deepFreeze(event), result);
     if (!skipSync) {
       this.#tabSync.sync(event);
     }
@@ -134,7 +133,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    */
   async broadcast<K extends T>(
     eventType: K,
-    sender: M,
+    sender: ClientID,
     data: P[K],
     skipSync = false,
   ): Promise<EventResult> {
@@ -143,7 +142,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
     // Guard 1: Check if beforeSend hook blocks the event
     if (!this.#hooks.beforeSend(deepFreeze(event))) {
       const result = this.#createResult('NACK', 'Broadcast blocked by beforeSend hook');
-      this.#hooks.afterSend(deepFreeze(event), { success: false, handled: false });
+      this.#hooks.afterSend(deepFreeze(event), result);
       return result;
     }
 
@@ -151,7 +150,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
     const recipients = this.#subscriptions.getSubscribersExcept(eventType, sender);
     if (recipients.size === 0) {
       const result = this.#createResult('NACK', `No subscribers for event '${eventType}'`);
-      this.#hooks.afterSend(deepFreeze(event), { success: false, handled: false });
+      this.#hooks.afterSend(deepFreeze(event), result);
       return result;
     }
 
@@ -159,9 +158,13 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
     for (const clientId of recipients) {
       const handler = this.#subscriptions.getHandler(clientId, eventType);
       if (handler) {
-        Promise.resolve(handler(event)).catch((handlerError: unknown) => {
+        try {
+          Promise.resolve(handler(event)).catch((handlerError: unknown) => {
+            console.error(`❌ Handler failed for client ${clientId}:`, handlerError);
+          });
+        } catch (handlerError: unknown) {
           console.error(`❌ Handler failed for client ${clientId}:`, handlerError);
-        });
+        }
       }
     }
 
@@ -171,8 +174,8 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
       `Broadcast sent to ${recipients.size} subscriber${recipients.size === 1 ? '' : 's'}`,
     );
 
-    // Post-processing
-    this.#hooks.afterSend(deepFreeze(event), { success: true, handled: true });
+    // Post-processing - pass full EventResult
+    this.#hooks.afterSend(deepFreeze(event), result);
     if (!skipSync) {
       this.#tabSync.sync(event);
     }
@@ -285,7 +288,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    * @param hook - Function called on each subscription
    * @returns Cleanup function to remove the hook
    */
-  useOnSubscribeHandler(hook: OnSubscribeHandlerHook<T, M>): () => void {
+  useOnSubscribeHandler(hook: OnSubscribeHandlerHook<T>): () => void {
     return this.#hooks.addOnSubscribeHandler(hook);
   }
 
@@ -298,7 +301,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    * @param hooks - Array of EventBrokerHook functions
    * @returns Cleanup function to remove all registered hooks
    */
-  registerHooks(hooks: EventBrokerHook<T, P, M>[]): () => void {
+  registerHooks(hooks: EventBrokerHook<T, P>[]): () => void {
     return this.#hooks.registerEventBrokerHooks(hooks, this);
   }
 
@@ -333,7 +336,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
   #handleTabSyncedEvent(event: Event<T, P[T]>): void {
     const recipient = event['mfe-recipient'];
     const eventType = event.type;
-    const sender = event.source as M;
+    const sender = event.source;
     const data = event.data;
 
     if (recipient !== '*') {
@@ -349,7 +352,7 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    */
   #createEvent<K extends T>(
     eventType: K,
-    sender: M,
+    sender: ClientID,
     recipient: ClientID | '*',
     data: P[K],
   ): Event<K, P[K]> {
@@ -370,28 +373,41 @@ export class EventBroker<T extends string, P extends Record<T, any>, M extends C
    * Create an EventResult object
    * @private
    */
-  #createResult(status: 'ACK' | 'NACK', message: string, clientId?: ClientID): EventResult {
+  #createResult(
+    status: 'ACK' | 'NACK',
+    message: string,
+    clientId?: ClientID,
+    data?: any,
+  ): EventResult {
     return {
       status,
       message,
       timestamp: Date.now(),
       ...(clientId && { clientId }),
+      ...(data !== undefined && { data }),
     };
   }
 
   /**
    * Execute a handler with error handling
+   * @returns Object with success status and optional response data
    * @private
    */
-  async #executeHandler(event: Event<T, P[T]>, handler: Function | undefined): Promise<boolean> {
-    if (!handler) return false;
+  async #executeHandler(
+    event: Event<T, P[T]>,
+    handler: Function | undefined,
+  ): Promise<{
+    success: boolean;
+    data?: any;
+  }> {
+    if (!handler) return { success: false };
 
     try {
-      await handler(event);
-      return true;
+      const result = await handler(event);
+      return { success: true, data: result };
     } catch (handlerError) {
       console.error(`❌ Handler failed:`, handlerError);
-      return false;
+      return { success: false };
     }
   }
 }

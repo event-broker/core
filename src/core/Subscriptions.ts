@@ -36,6 +36,9 @@ export class Subscriptions<T extends string> {
    * - Adds event to client's subscription set
    * - Stores handler with composite key
    *
+   * Note: Only one handler per client per event type.
+   * Subsequent subscriptions will replace the previous handler.
+   *
    * @param clientId - Unique client identifier
    * @param eventType - Event type to subscribe to
    * @param handler - Event handler function

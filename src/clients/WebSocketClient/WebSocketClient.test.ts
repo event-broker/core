@@ -9,12 +9,12 @@ type TestEventPayloads = {
 };
 
 describe('WebSocketClient', () => {
-  let broker: EventBroker<TestEventType, TestEventPayloads, string>;
+  let broker: EventBroker<TestEventType, TestEventPayloads>;
   let client: WebSocketClient<TestEventType>;
   let mockWs: any;
 
   beforeEach(() => {
-    broker = new EventBroker<TestEventType, TestEventPayloads, string>();
+    broker = new EventBroker<TestEventType, TestEventPayloads>();
 
     // Create mock WebSocket
     mockWs = {
