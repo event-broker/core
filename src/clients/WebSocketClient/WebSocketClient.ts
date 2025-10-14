@@ -50,12 +50,15 @@ export class WebSocketClient<T extends string, P = any> implements Client<T, P> 
 
   /**
    * Dispatch event (unicast or broadcast)
+   *
+   * Note: skipSync=true because WebSocket events arrive to ALL tabs simultaneously.
+   * Cross-tab sync is unnecessary and would cause duplicate events.
    */
   async dispatch(eventType: T, recipient: ClientID | '*', data: P): Promise<EventResult> {
     if (recipient === '*') {
-      return this.#broker.broadcast(eventType, this.id, data);
+      return this.#broker.broadcast(eventType, this.id, data, true); // skipSync=true
     }
-    return this.#broker.sendTo(eventType, this.id, recipient, data);
+    return this.#broker.sendTo(eventType, this.id, recipient, data, true); // skipSync=true
   }
 
   /**

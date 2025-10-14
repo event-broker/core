@@ -82,11 +82,19 @@ export interface EventResult<TResponse = any> {
   data?: TResponse;
 }
 
-export type OnSubscribeHandlerHook<T> = (eventType: T, clientID: ClientID) => void;
+/**
+ * Result of hook execution
+ *
+ * - allowed: true - Operation is allowed
+ * - allowed: false + message - Operation is blocked with reason
+ */
+export type HookResult = { allowed: true } | { allowed: false; message: string };
+
+export type OnSubscribeHandlerHook<T> = (eventType: T, clientID: ClientID) => HookResult;
 
 export type BeforeSendHook<T extends string, P extends Record<T, any>> = (
   event: Readonly<Event<T, P[T]>>,
-) => boolean;
+) => HookResult;
 
 export type AfterSendHook<T extends string, P extends Record<T, any>> = (
   event: Readonly<Event<T, P[T]>>,

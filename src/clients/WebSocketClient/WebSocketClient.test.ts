@@ -81,6 +81,7 @@ describe('WebSocketClient', () => {
       'websocket_client',
       'frontend_app',
       { message: 'Hello from backend' },
+      true, // skipSync=true for WebSocket events
     );
   });
 

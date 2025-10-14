@@ -6,6 +6,7 @@ import type {
   EventBrokerHook,
   Event,
   ClientID,
+  HookResult,
 } from '../core/types';
 
 /**
@@ -111,19 +112,48 @@ export class HooksRegistry<T extends string, P extends Record<T, any>> {
    *
    * @param eventType - Event type being subscribed to
    * @param clientID - Client ID subscribing
+   * @returns HookResult: allowed=true if all hooks allow, or first blocking result
    */
-  onSubscribe(eventType: T, clientID: ClientID): void {
-    this.#onSubscribeHooks.run((hook) => hook(eventType, clientID));
+  onSubscribe(eventType: T, clientID: ClientID): HookResult {
+    let result: HookResult = { allowed: true };
+
+    this.#onSubscribeHooks.run((hook) => {
+      const hookResult = hook(eventType, clientID);
+
+      // First hook that blocks stops execution
+      if (!hookResult.allowed) {
+        result = hookResult;
+        return false; // Stop iteration
+      }
+
+      return true; // Continue to next hook
+    });
+
+    return result;
   }
 
   /**
    * Execute beforeSend hooks
    *
    * @param event - Event about to be sent
-   * @returns false if any hook blocks the event, true otherwise
+   * @returns HookResult: allowed=true if all hooks allow, or first blocking result
    */
-  beforeSend(event: Readonly<Event<T, P[T]>>): boolean {
-    return this.#beforeSendHooks.run((hook) => hook(event));
+  beforeSend(event: Readonly<Event<T, P[T]>>): HookResult {
+    let result: HookResult = { allowed: true };
+
+    this.#beforeSendHooks.run((hook) => {
+      const hookResult = hook(event);
+
+      // First hook that blocks stops execution
+      if (!hookResult.allowed) {
+        result = hookResult;
+        return false; // Stop iteration
+      }
+
+      return true; // Continue to next hook
+    });
+
+    return result;
   }
 
   /**

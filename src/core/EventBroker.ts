@@ -35,10 +35,18 @@ export class EventBroker<T extends string, P extends Record<T, any>> {
    * @param clientId - Unique client identifier
    * @param eventType - Event type to subscribe to
    * @param handler - Event handler function
+   * @throws Error if subscription is blocked by onSubscribe hook
    */
   subscribe<K extends T>(clientId: ClientID, eventType: K, handler: Function): void {
+    // Check if onSubscribe hooks allow this subscription
+    const hookResult = this.#hooks.onSubscribe(eventType, clientId);
+
+    if (!hookResult.allowed) {
+      throw new Error(hookResult.message);
+    }
+
+    // Subscribe if allowed
     this.#subscriptions.subscribe(clientId, eventType, handler);
-    this.#hooks.onSubscribe(eventType, clientId);
   }
 
   /**
@@ -78,8 +86,9 @@ export class EventBroker<T extends string, P extends Record<T, any>> {
     const event = this.#createEvent(eventType, sender, recipient, data);
 
     // Guard 1: Check if beforeSend hook blocks the event
-    if (!this.#hooks.beforeSend(deepFreeze(event))) {
-      const result = this.#createResult('NACK', 'Event blocked by beforeSend hook', recipient);
+    const hookResult = this.#hooks.beforeSend(deepFreeze(event));
+    if (!hookResult.allowed) {
+      const result = this.#createResult('NACK', hookResult.message, recipient);
       this.#hooks.afterSend(deepFreeze(event), result);
       return result;
     }
@@ -140,8 +149,9 @@ export class EventBroker<T extends string, P extends Record<T, any>> {
     const event = this.#createEvent(eventType, sender, '*', data);
 
     // Guard 1: Check if beforeSend hook blocks the event
-    if (!this.#hooks.beforeSend(deepFreeze(event))) {
-      const result = this.#createResult('NACK', 'Broadcast blocked by beforeSend hook');
+    const hookResult = this.#hooks.beforeSend(deepFreeze(event));
+    if (!hookResult.allowed) {
+      const result = this.#createResult('NACK', hookResult.message);
       this.#hooks.afterSend(deepFreeze(event), result);
       return result;
     }
