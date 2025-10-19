@@ -69,14 +69,13 @@ await client.dispatch('user.created.v1', '*', {
 │  │ Subscriptions│  │ HooksRegistry│  │   TabSync    │   │
 │  └──────────────┘  └──────────────┘  └──────────────┘   │
 └─────────────────────────────────────────────────────────┘
-                          ▲
-                          │
-        ┌─────────────────┼─────────────────┐
-        │                 │                 │
-   ┌────▼────┐      ┌────▼────┐      ┌────▼────┐
-   │ InMemory│      │WebSocket│      │  Worker │
-   │ Client  │      │ Client  │      │ Client  │
-   └─────────┘      └─────────┘      └─────────┘
+         ▲                   ▲                   ▲
+         │                   │                   │
+         │                   │                   │
+   ┌─────┴─────┐       ┌─────┴─────┐       ┌─────┴─────┐
+   │ InMemory  │       │ WebSocket │       │  Worker   │
+   │  Client   │       │  Client   │       │  Client   │
+   └───────────┘       └───────────┘       └───────────┘
 ```
 
 ### Core Components
@@ -173,7 +172,7 @@ if (result.data.valid) {
 
 ## 🔌 Ecosystem
 
-- **[@event-broker/devtools](../mfe-event-devtools)** - React DevTools panel for debugging
+- **[@event-broker/devtools](https://github.com/event-broker/devtools)** - React DevTools panel for debugging
 
 ## 📊 Performance
 
@@ -228,11 +227,18 @@ broker.registerHooks([myPlugin]);
 
 ### DevTools Integration
 
-```typescript
-import { DevToolsManager } from '@event-broker/devtools';
+```tsx
+import React from 'react';
+import { EventBrokerDevTools } from '@event-broker/devtools';
 
-const devtools = new DevToolsManager(broker);
-devtools.mount('#devtools-root');
+function App() {
+  return (
+    <div>
+      {/* Your app */}
+      <EventBrokerDevTools broker={broker} />
+    </div>
+  );
+}
 ```
 
 ## 🧪 Testing
